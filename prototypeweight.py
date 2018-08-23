@@ -18,6 +18,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as ft
 import wrf
 from scipy import interpolate
+import pdb
 #mainDir="C:\\Python\\verif"
 #dirs=[x[0] for x in os.walk(mainDir)]
 #pkldirs=[loc for loc in dirs if 'd03' in dirs]
@@ -84,38 +85,32 @@ strptimes = [datetime.strptime(n, '%Y-%m-%d_%H:%M:%S') for n in times]
 timeArray=[np.where([strptimes[n].minute==0 for n in range(len(strptimes))])]
 
 nctPrecip=nct['RAINNC'][timeArray[0][0]]
-nctTimes= [strptimes[q] for x,q in enumerate(timeArray)]
-
+nctTimes= [strptimes[q] for x,q in enumerate(timeArray[0][0])]
+lons=np.squeeze(lons)
+lats=np.squeeze(lats)
 states = ft.NaturalEarthFeature(category='cultural',scale='50m',facecolor='none',
                                             name='admin_1_states_provinces_lines')
-fig=plt.figure(figsize=(20,20))
-for x in range(0,lons.shape[0]):
-    for y in range(0,lons.shape[1]):
-        indtestlon=np.where(np.logical_and(lons<=lons[x,y]+londiff,lons>=lons[x,y]-londiff))
-#        print('indtestlon {}.{:1.0f}'.format((datetime.now()-a).seconds, (datetime.now()-a).microseconds/1000))
-#        a=datetime.now()
-        indcomblon=np.vstack((indtestlon[0][:],indtestlon[1][:])).T
 
-        indtestlat=np.where(np.logical_and(lats<=lats[x,y]+latdiff,lats>=lats[x,y]-latdiff))
+for n in range(len(test1['time'])):
+    grid_z0 = interpolate.griddata((lonsverif.flatten(),latsverif.flatten()),precipdata[n].T.flatten(), (lons.squeeze(),lats.squeeze()), method='nearest')
+    for x in range(0,lons.shape[0]):
+        for y in range(0,lons.shape[1]):
+            
+            indtestlon=np.where(np.logical_and(lons<=lons[y,x]+londiff,lons>=lons[y,x]-londiff))
 
-        indcomblat=np.vstack((indtestlat[0][:],indtestlat[1][:])).T
+            indcomblon=np.vstack((indtestlon[0][:],indtestlon[1][:])).T
     
-        np.squeeze(np.array([np.where(np.prod(indcomblat==n, axis = -1)) for n in indcomblon if np.where(np.prod(indcomblat==n, axis = -1))[0].size>0]))
-       
-        pointsinrange=indcomblat[np.squeeze(np.array([np.where(np.prod(indcomblat==n, axis = -1)) for n in indcomblon if np.where(np.prod(indcomblat==n, axis = -1))[0].size>0]))]
+            indtestlat=np.where(np.logical_and(lats<=lats[y,x]+latdiff,lats>=lats[y,x]-latdiff))
+    
+            indcomblat=np.vstack((indtestlat[0][:],indtestlat[1][:])).T
+        
+            pointsinrange=indcomblat[np.squeeze(np.array([np.where(np.prod(indcomblat==n, axis = -1)) for n in indcomblon if np.where(np.prod(indcomblat==n, axis = -1))[0].size>0]))]
+    
+            weightArray = np.ones_like(pointsinrange[:,0],dtype=np.float)
+            setArray = pointsinrange-[y,x]
 
-        weightArray = np.ones_like(pointsinrange[:,0],dtype=np.float)
-        setArray = pointsinrange-[x,y]
-        #test1['Total_precipitation_surface_1_Hour_Accumulation'][0,pointsinrange[:,1],pointsinrange[:,0]]
-        for n in range(len(test1['time'])):
-            grid_z0 = interpolate.griddata((lonsverif.flatten(),latsverif.flatten()),precipdata[n].T.flatten(), (lons.squeeze(),lats.squeeze()), method='nearest')
-
-    #        a=datetime.now()
-
-            #testones=np.random.randint(0,high=20,size=lons.shape)
-            #testones[pointsinrange[:,0],pointsinrange[:,1]]=100
-            #print(x,y)
-            #print(pointsinrange[:,0]-x,pointsinrange[:,1]-y)
+            testones=np.random.randint(0,high=20,size=lons.shape)
+            testones[pointsinrange[:,0],pointsinrange[:,1]]=100
 
             for m in range(len(pointsinrange)):
                 wt=float(np.max(abs(setArray[m])))
@@ -125,7 +120,7 @@ for x in range(0,lons.shape[0]):
                     weightArray[m]=1./wt
     
             
-            #testones[pointsinrange[:,0],pointsinrange[:,1]]*=weightArray
+
             ax1 = plt.axes(projection=ccrs.PlateCarree())
             ax1.coastlines(resolution=('10m'), zorder=4)
             ax1.add_feature(ft.BORDERS,alpha=0.7,zorder=3)
@@ -133,25 +128,10 @@ for x in range(0,lons.shape[0]):
             ax1.add_feature(ft.RIVERS,alpha=0.4,edgecolor='gray', zorder=3)
             ax1.add_feature(states, edgecolor='gray', zorder=3)
             ax1.add_feature(ft.LAKES,alpha=0.5,facecolor='gray', zorder=3)
-            c=ax1.pcolormesh(lonsverif,latsverif,precipdata[n].T,vmin=0,vmax=10,transform=ccrs.PlateCarree(),cmap=plt.cm.Blues)
-            c1=ax1.pcolormesh(lons[0],lats[0],grid_z0,vmin=0,vmax=10,transform=ccrs.PlateCarree(),cmap=plt.cm.Blues)
-            #plt.savefig('C:/Python/img/{}{}.png'.format(x,y),bbox_inches='tight')
+            c=ax1.pcolormesh(lons,lats,testones,transform=ccrs.PlateCarree(),cmap=plt.cm.Blues)
+            #c1=ax1.pcolormesh(lons[0],lats[0],grid_z0,vmin=0,vmax=10,transform=ccrs.PlateCarree(),cmap=plt.cm.Blues)
+            #plt.savefig('C:/Python/img/{}{}.png'.format(y,x),bbox_inches='tight')
             plt.show()
             c.remove()
-            c1.remove()
-            
-    #        states = ft.NaturalEarthFeature(category='cultural',scale='50m',facecolor='none',
-    #                                            name='admin_1_states_provinces_lines')
-    #        fig=plt.figure(figsize=(10,10))
-    #        #testones=np.random.randint(0,high=20,size=lons.shape)
-    #        ax1 = plt.subplot(2, 1, 1, projection=ccrs.PlateCarree())
-    #        ax1.coastlines(resolution=('10m'), zorder=4)
-    #        ax1.add_feature(ft.BORDERS,alpha=0.7,zorder=3)
-    #        ax1.set_extent([-76, -72, 39, 42],crs=ccrs.PlateCarree())
-    #        ax1.add_feature(ft.RIVERS,alpha=0.4,edgecolor='gray', zorder=3)
-    #        ax1.add_feature(states, edgecolor='gray', zorder=3)
-    #        ax1.add_feature(ft.LAKES,alpha=0.5,facecolor='gray', zorder=3)
-    #        c=ax1.pcolormesh(lons[:],lats[:],test1['Total_precipitation_surface_1_Hour_Accumulation'][0].T,transform=ccrs.PlateCarree(),cmap=plt.cm.Blues)
-    #        plt.colorbar(c)
-    #        plt.show()
-    #        plt.close(fig)
+
+                
