@@ -32,6 +32,7 @@ class precip_breakdown(object):
         self.rtop=642
         self.veriflats=self.verif['lat'].T
         self.veriflons=self.verif['lon'].T
+        
     def regrid(self):
  
         model_regrid = interpolate.griddata((self.lons.stack(z=('south_north', 'west_east')).reset_index('z'),self.lats.stack(z=('south_north', 'west_east')).reset_index('z')),self.get_hourly_precip().T.stack(z=('south_north', 'west_east')).reset_index('z'), (self.veriflons,self.veriflats), method='linear')
@@ -43,18 +44,21 @@ class precip_breakdown(object):
         filenames=[n for n in os.listdir(self.directory) if os.path.isfile(os.path.join(self.directory, n))]
         return filenames   
     
-    def load_file(self,ll=False):
+    def load_file(self,ll=False,convert=True):
                 
             filenames=self.load_filelist()
             if ll==True:
 
-                ll_file = Dataset(filenames[0])
+                ll_file = xr.open_dataset(filenames[0])
                 return ll_file
-    def get_hourly_precip(self):
-        
-        bignc=self.load_file()
-        model_precip_hourly = bignc['RAINNC'][:]
-        return model_precip_hourly
+            else:
+                data_file = xr.open_dataset(filenames[0])
+                model_precip_hourly = data_file['RAINNC'][:]
+                if convert == True:
+                    model_precip_hourly=self.convert_accum(model_precip_hourly)
+                    return model_precip_hourly
+                
+
     
     def load_verif(self):
         timedata=xr.open_dataset('https://cida.usgs.gov/thredds/dodsC/stageiv_combined?Total_precipitation_surface_1_Hour_Accumulation[0:1:146114][{}:1:{}][{}:1:{}],time[0:1:146114],lon[0:1:146114][{}:1:{}][{}:1:{}],lat[0:1:146114][{}:1:{}][{}:1:{}]'.format(self.ltop,self.rtop,self.lbot,self.rbot,self.lbot,self.rbot,self.ltop,self.rtop,self.lbot,self.rbot,self.ltop,self.rtop))
@@ -74,31 +78,34 @@ class precip_breakdown(object):
               plotdirs.append(os.path.join(root, name))
         return plotdirs
     
-
-
+    def convert_accum(self,ncfile):
+        
+        ## Sets the arrays from total accum to hourly precip
+        modelPrecip=np.array([ncfile[n]-ncfile[n-1] for n in range(len(ncfile)) if n>0])
+    
+        ## Generates hourly, 6 hourly, or 24 hourly data depending on accumu set earlier in script
+        modelPrecip=np.array([np.sum(modelPrecip[n-self.hour:n],axis=0) for n in range(self.hour,len(time_arr))]) 
+ 
+        return modelPrecip
+            
     def get_times(self,ncfile):
         
         ## Extract times
-        times=[''.join([ncfile['Times'][m][n].decode("utf-8") for n in range(len(ncfile['Times'][m]))]) for m in range(len(nct['Times'][:]))]
-    
-        ## Convert times to hourly and datetime format
-        strptimes = [datetime.strptime(n, '%Y-%m-%d_%H:%M:%S') for n in times]
+        strptimes = [datetime.strptime(n.decode("utf-8"), '%Y-%m-%d_%H:%M:%S') for n in ncfile['Times'].to_pandas()]
         timeArray=[np.where([strptimes[n].minute==0 for n in range(len(strptimes))])]
-        nctTimes= [strptimes[q] for x,q in enumerate(timeArray[0][0])]
-    
-    ## Take precip arrays with the time data
-    modelPrecip=ncFILE['RAINNC'][timeArray[0][0]]
-    
-    ## Sets the arrays from total accum to hourly precip
-    modelPrecip=np.array([modelPrecip[n]-modelPrecip[n-1] for n in range(len(modelPrecip)) if n>0])
-    
-    ## Generates hourly, 6 hourly, or 24 hourly data depending on accumu set earlier in script
-    modelPrecip=np.array([np.sum(modelPrecip[n-accumu:n],axis=0) for n in range(accumu,len(nctTimes))])
         
-def run_loop():
-    '''
-    Runs through the directory and collects data from each file
-    This will probably need to be batchified...
+        return timeArray
 
-    '''
-            
+        
+    def run_loop(self):
+        '''
+        Runs through the directory and collects data from each file
+        This will probably need to be batchified...
+    
+        '''
+        ncfile = self.load_file()
+        time_arr=self.get_times(ncfile)
+        ## Take precip arrays with the time data
+        modelPrecip=ncfile['RAINNC'][time_arr[0][0]]
+        
+           
